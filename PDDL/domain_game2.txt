@@ -1,4 +1,4 @@
-﻿(define (domain game2)
+(define (domain game2)
 (:requirements :strips)
 (:predicates (at ?a ?x)
              (empty ?x)
