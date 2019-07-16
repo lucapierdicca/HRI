@@ -159,7 +159,7 @@ class Show(NAOqiAction_Base):
 
     def actionThread_exec(self, params):
 
-        self.robot.tablet_service.showWebview("http://10.0.1.204:8000")
+        self.robot.tablet_service.showWebview("http://10.0.1.214:8000")
 
         # action end
         action_termination(self.actionName,params)
