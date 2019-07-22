@@ -1,13 +1,15 @@
 import numpy as np
 import cv2
 import time
-from sklearn.cluster import KMeans
+
 import pickle
 from pprint import pprint
 from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
 import threading
 
-n_cells = 2*2
+n_cells = 6*6
 
 
 #----------------GRID VERTICES IDENTIFICATION--------------------
@@ -15,6 +17,7 @@ n_cells = 2*2
 
 '''
 cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FOCUS, 200) 
 time.sleep(2)
 ret, frame = cap.read()
 cap.release()
@@ -33,7 +36,7 @@ frame_bw = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 #kernel = np.ones((3,3),np.uint8)
 #frame_bw = cv2.dilate(frame_bw,kernel,iterations = 2)
 
-corners = cv2.goodFeaturesToTrack(frame_bw,4,0.08,250)
+corners = cv2.goodFeaturesToTrack(frame_bw,4,0.1,15)
 corners = np.int0(corners)
 
 grid_vertices = []
@@ -61,8 +64,8 @@ pickle.dump(grid_vertices, open('grid_vertices.pickle','wb'))
 cv2.imwrite('frame.png',frame)
 cv2.imshow('image',frame)
 cv2.waitKey(0)
-'''
 
+'''
 
 
 
@@ -70,7 +73,7 @@ cv2.waitKey(0)
 #--------------------CELL CLUSTERS IDENTIFICATION----------------------------
 #----------------------------------------------------------------------------
 '''
-THRESHOLD = 145
+THRESHOLD = 190
 ITERATIONS = 2
 
 cap = cv2.VideoCapture(0)
@@ -155,7 +158,7 @@ cell_identification = []
 
 for coord in cluster_centers_coord:
 	cell_identification.append({'id':str(coord[2])+str(coord[3]),
-								'cluster_centroid':(int(coord[0]),int(coord[1])),
+								'cell_centroid':(int(coord[0]),int(coord[1])),
 								'cluster_lbl':coord[4],
 								'edge_rect':[coord[5],coord[6]]})
 
@@ -176,6 +179,7 @@ cv2.waitKey(0)
 
  #----------------GLOBAL_VAR---------------
 cell_identification = pickle.load(open('cell_identification.pickle','rb'))
+
 grid_vertices = pickle.load(open('grid_vertices.pickle','rb'))
 
 
@@ -186,11 +190,21 @@ X = np.array([[1,0],
 			  [0,-1]])
 y = ['E','N','O','S']
 
-light_red = (0, 100, 100)
-dark_red = (10, 255, 255)
+light_red = (0,100,100)
+dark_red = (10,255,255)
 
-light_yellow = (20, 100, 100) 
+light_yellow = (20,100,100) 
 dark_yellow = (30,255,255)
+
+light_blue = (100,150,0)
+dark_blue = (140,255,255)
+
+
+#color = np.uint8([[[255,255,0]]])
+#hsv_color = cv2.cvtColor(color,cv2.COLOR_BGR2HSV)
+
+light = (80,100,100)
+dark = (100,255,255)
 
 
 state = np.zeros((2,2,2))
@@ -200,6 +214,41 @@ id_to_bgr = {1:(0,0,255),2:(0,255,255)}
 color_to_id = {v:k for k,v in id_to_color.items()}
 id_to_orie = {1:'N',2:'E',3:'S',4:'O'}
 orie_to_id = {v:k for k,v in id_to_orie.items()}
+
+
+
+
+moves = {'OcDX':[(4,4),(1,4),(1,1),(3,1),(3,2),(4,2),(4,1),(4,4)],
+		 'OcSX':[(1,4),(4,4),(4,1),(2,1),(2,2),(1,2),(1,1),(1,4)],
+		 'OrDX':[(4,5),(1,5),(1,0),(4,0),(4,2),(3,2)],
+		 'OrSX':[(1,5),(4,5),(4,0),(1,0),(1,2),(2,2)],
+		 'T':[(0,4),(5,4),(5,2),(3,2),(3,4),(2,4),(2,2),(0,2),(0,4)],
+		 'P':[(2,4),(4,4),(4,3),(2,3),(2,2),(4,2),(4,0),(2,0),(2,2)],
+		 'SpDX':[(5,5),(0,5),(0,0)],
+		 'SpSX':[(0,5),(5,5),(5,0)],
+		 'N':[(1,5),(1,2),(4,2),(4,5)]}
+
+
+
+def drawMove(move):
+	img_h,img_w,shift,cell_dim = 300,300,5,50
+	img_grid = np.zeros([img_h,img_w,3],dtype=np.uint8)
+	img_grid[...] = [255,255,255]
+	
+	ul,br = (0,img_h-cell_dim),(cell_dim,img_h)
+
+	for y in range(n_cells//6):
+		for x in range(n_cells//6):
+			cv2.rectangle(img_grid,
+				((ul[0]+(x*50))+shift,(ul[1]-(y*50))+shift),
+				((br[0]+(x*50))-shift,(br[1]-(y*50))-shift),
+				(185,185,185),-1)
+				
+
+	cv2.imshow('img',img_grid)
+	cv2.waitKey(0)
+
+
 
 
 
@@ -284,7 +333,7 @@ def sense(frame_hsv):
 			state[int(cell['id'][0]),int(cell['id'][1]),1] = 0
 
 
-def render(generic_state):
+def display(generic_state):
 
 	global cell_identification,id_to_bgr
 	grid_img = cv2.imread('cell_centroid.png',1)
@@ -334,23 +383,78 @@ def render(generic_state):
 	cv2.imshow('img',grid_img)
 	cv2.waitKey(0)
 
-def monitor(cap):
-	global light_red,dark_red,light_yellow,dark_yellow
-	
+def trajectory(cap):
+	global light_blue, dark_blue, cell_identification
+
+	curr_trajectory = []
+
 	while True:
 		ret, frame = cap.read()
 		frame, frame_hsv = frame_transform(frame)
 		
-		mask_red = cv2.inRange(frame_hsv, light_red, dark_red)
-		mask_yellow = cv2.inRange(frame_hsv, light_yellow, dark_yellow)
-		all_mask = mask_red+mask_yellow
-		result = cv2.bitwise_and(frame, frame, mask=all_mask)
+		mask = cv2.inRange(frame_hsv, light, dark)
+
+		try:
+			cnt = cv2.findContours(mask, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[0][0]
+			M = cv2.moments(cnt)
+			cx = int(M['m10']/M['m00'])
+			cy = int(M['m01']/M['m00'])
+			curr_trajectory.append([cx,cy])
+		except:
+			pass
+		
+
+		result = cv2.bitwise_and(frame, frame, mask=mask)
+		
+		try:
+			cv2.circle(result,(cx,cy),2,(255,255,255),-1)
+			cv2.polylines(result,[np.asarray(curr_trajectory)],False,(255,255,0),2)
+		except:
+			pass
+		
+		for cell in cell_identification:
+			cv2.rectangle(result,cell['edge_rect'][0],cell['edge_rect'][1],(0,0,255),2)
+		
 		cv2.imshow('frame',frame)
 		cv2.imshow('masked',result)
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			break
-	cap.release()
+	
 
+	return curr_trajectory
+
+
+def discretize(trajectory):
+	global cell_identification
+	cell_centroids = [cell['cluster_centroid'] for cell in cell_identification]
+
+	neigh = NearestNeighbors(n_neighbors=1)
+	neigh.fit(cell_centroids)
+	
+
+	discretization = {}
+
+	for index,cluster_id in enumerate(neigh.kneighbors(trajectory, return_distance=False)):
+		if cell_identification[cluster_id[0]]['id'] not in discretization:
+			discretization[cell_identification[cluster_id[0]]['id']]=[trajectory[index]]
+		else:
+			discretization[cell_identification[cluster_id[0]]['id']].append(trajectory[index])
+
+	return discretization
+
+def render(discretization):
+	global cell_identification
+
+	cellid_to_cellrect = {cell['id']:cell['edge_rect'] for cell in cell_identification}
+	img = np.zeros([260,260,3],dtype=np.uint8)
+	img[...] = [255,255,255]
+
+	for cellid in discretization.keys():
+		ul = cellid_to_cellrect[cellid][0]
+		br = cellid_to_cellrect[cellid][1]
+		cv2.rectangle(img,ul,br,(255,255,0),-1)
+
+	return img
 
 def start_thread(target,cap):
 	x = threading.Thread(target=target, args=(cap,))
@@ -380,64 +484,55 @@ def to_PDDL(init_goal_state, problem_file):
 	pprint(init_goal_PDDL)
 
 
-def test():
 
-	init = np.zeros((2,2,2),dtype=int)
-	goal = np.zeros((2,2,2),dtype=int)
-
-	init[0,0,0] = 1
-	init[0,0,1] = 3
-	init[1,1,0] = 2
-	init[1,1,1] = 1
-
-	goal[0,0,0] = 2
-	goal[0,0,1] = 4
-	goal[1,1,0] = 1
-	goal[1,1,1] = 1
-	
-	
-	to_PDDL([init,goal],'./PDDL/p_static.txt')
-
-
-
-	
 
 
 
 			
 def main():
-
 	
-	cap = cv2.VideoCapture(0)
-	start_thread(monitor,cap)
-	
-	input('Configura goal e premi Invio')
-	ret, frame = cap.read()
-	frame,frame_hsv = frame_transform(frame)
-	
-	sense(frame_hsv)
-	goal = state.copy()
-	render(goal)
 
+	while True:
+		
+		print('Start capture')
+		cap = cv2.VideoCapture(0)
+		curr_trajectory = trajectory(cap)
+		cap.release()
+		print('End capture')
 
-	input('Configura init e premi Invio')
-	ret, frame = cap.read()
-	frame,frame_hsv = frame_transform(frame)
-	
-	sense(frame_hsv)
-	init = state.copy()
-	render(init)
+		discretization = discretize(curr_trajectory)
 
-	cap.release()
-	
-	# prepara il problem file init e goal to PDDL
+		move = render(discretization)
 
-	# richiedi il plan
+		cv2.imshow('move',move)
+		
+		print('Waiting')
+		if cv2.waitKey(3000) & 0xFF == ord('q'):
+			break
+
 	
 
 
+drawMove(0)
 
-test()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -516,13 +611,31 @@ cv2.destroyAllWindows()
 
 
 
+'''
+init_state = [0,0,0,0,0]
+goal_state = [1,1,1,1,1]
+curr_state = init_state
 
 
 
-
-
-
-
+while True:
+	if goal_state == curr_state:
+		break
+	else:
+		x,y = observe()
+		if (curr_state[0] != x) or (curr_state[1] != y):
+			
+			curr_state[0] = x
+			curr_state[1] = y
+			
+			if curr_state == [3,4,0,1,1]:
+				say('asdasda')
+			elif curr_state == [5,4,1,1,1]:
+				say('asdasda?')
+				ans = asr()
+				if ans == 'yes':
+					grab()
+'''
 
 
 
