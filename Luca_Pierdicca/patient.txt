@@ -1,0 +1,4 @@
+nome:Luca
+prima_visita:True
+durata:10
+giorno:0

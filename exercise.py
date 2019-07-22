@@ -357,6 +357,8 @@ def pepper_img():
 
 	cv2.imwrite(dest_path+'0_c.png',img)
 
+
+
 def main():
 
 	global moves
@@ -398,8 +400,7 @@ def main():
 
 	
 
-
-
-main()
+if __name__ == "__main__":
+	main()
 
 

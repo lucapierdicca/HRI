@@ -179,6 +179,23 @@ class Say(NAOqiAction_Base):
         # action end
         action_termination(self.actionName,params)
 
+class Touch(NAOqiAction_Base):
+    
+    def __init__(self, actionName, session, robot):
+        NAOqiAction_Base.__init__(self,actionName, session)
+        self.robot = robot
+
+    def actionThread_exec(self, params):
+        jointNames = ["LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll", "LWristYaw"]
+        jointValues = [float(i) for i in params.split('_')]
+
+        isAbsolute = True
+        self.robot.motion_service.angleInterpolation(jointNames, jointValues, 2.0, isAbsolute)
+
+
+        # action end
+        action_termination(self.actionName,params)
+
 
 def initActions():
 
@@ -197,6 +214,7 @@ def initActions():
     Say('Say',app.session, pepper_cmd.robot)
     Wait('Wait', app.session)
     Show('Show',app.session,pepper_cmd.robot,mc)
+
 
     # then we return the app object
     return app

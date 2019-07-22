@@ -31,7 +31,7 @@ from pprint import pprint
 
 
 def onWordRecognized(value):
-    print ("value",value)
+    print("value",value)
 
 
 def onFaceDetected(value):
