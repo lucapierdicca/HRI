@@ -1,1 +1,0 @@
-giorno,mossa,ttc,mean_dfc
