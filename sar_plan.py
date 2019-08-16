@@ -69,7 +69,7 @@ pepper = sar_cmd.robot
 
 
 # start the interaction, awareness and face detection/recognition
-voc = ['Hey Pepper', 'Hi Pepper']
+voc = ['hey Pepper', 'Hi Pepper']
 answer = pepper.ask('', voc)
 
 pepper.startBasicAwareness()
